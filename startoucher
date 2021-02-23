@@ -1,0 +1,230 @@
+-- Author:              Thomas Zito
+-- Name:                startoucher_v1_now_with_touch.lua
+-- Date:                FEB 16 2021
+-- Platform:            Codea for iOS
+-- Device:              iPhone X
+-- Viewport Size:       375 x 812 PX
+
+-- ok so i just need the bare minimum of code to test the following
+-- a few stars
+-- a starmap that i drag to scroll and pinch to zoom
+-- the stars should be selectable and deselectable
+-- selection will be done through a tap
+-- a star queue that every selected star gets added to
+ 
+-- we can probably seperate the touch stuff from the function but idc
+-- note: skip the random star generator for now
+
+
+
+-- STARMAP
+function setup()
+    stars =
+    {
+    {vec2=vec2(100, 140), tapped=false, name="Sol"},
+    {vec2=vec2(200, 522), tapped=false, name="Zachit Outpost"},
+    {vec2=vec2(111, 477), tapped=false, name="Miranu"},
+    {vec2=vec2(442, 355), tapped=false, name="Voinia"},
+    {vec2=vec2( 16, 480), tapped=false, name="Azdgar"},
+    {vec2=vec2( 51,  99), tapped=false, name="Alpha Centauri"},
+    {vec2=vec2( 22, 520), tapped=false, name="Zidagar"};
+    }
+    starviewbutton:setup()
+    DRAWSTARLISTVIEW = false
+end
+ 
+function draw()
+    background(0)
+    drawstars()
+    starviewbutton:draw()
+    if DRAWSTARLISTVIEW then
+        starlistview:draw()
+    end
+end
+ 
+function touched(touch)
+    startouch(touch.state, touch.x, touch.y)
+    starviewbutton:touched(touch)
+end
+ 
+-- https://developer.apple.com/design/tips/
+-- 44pt x 44pt is the minimum size for usability according to apple
+-- pt: 1/72 of an inch, with respect to the physical screen size
+-- at least codea takes care of it for us? i.e. WIDTH and HEIGHT gives 375 812 on iPhone X (@3x)
+function startouch(tstate, x, y)
+    -- only run the tap code if the touch state is began
+    if tstate == BEGAN then
+        local touch_radius = 22
+        for i = 1, #stars do
+            if vec2(x,y):dist(stars[i].vec2) <= touch_radius then
+                stars[i].tapped = not stars[i].tapped -- flips true/false
+            end
+        end
+    end
+end
+ 
+ 
+function drawstars()
+    rectMode(CENTER)
+    noStroke()
+    for i = 1, #stars do
+        if stars[i].tapped then
+            -- draw a circle around it or something idk
+            fill(228, 224, math.random(55))
+            ellipse(stars[i].vec2.x, stars[i].vec2.y, 62) -- (x,y,diameter) or (x,y,width,height)
+        end
+        fill(math.random(60), 190, 255)
+        rect(stars[i].vec2.x, stars[i].vec2.y, 44, 44) -- using rectMode(CENTER) x y is center
+    end
+    for i = 1, #stars do
+        fill(228,228,228)
+        local x = stars[i].vec2.x
+        local y = stars[i].vec2.y
+        text(stars[i].name, x, y)
+    end
+end
+ 
+-- begin second section
+-- this button is used to view all the stars that have been tapped
+-- this button exists on the starmap
+starviewbutton = {}
+function starviewbutton:setup()
+    local starviewer = {
+    vec2 = vec2(WIDTH-100, 50);
+    w = 88;
+    h = 44;
+    name = "Stars";
+    clickable = false;
+    pressing = false;
+    touchid = false; -- used to track the touch
+    idlestrokecolor = color(160,160,160);
+    idlefillcolor = color(228,228,228);
+    pressingstrokecolor = color(88,88,88);
+    pressingfillcolor = color(144,144,144);
+    unclickablestrokecolor = color(28,28,28);
+    unclickablefillcolor = color(56,56,56);
+    }
+    for k,v in pairs(starviewer) do
+        self[k] = v
+    end
+end
+ 
+function starviewbutton:draw()
+    rectMode(CORNER)
+    if not self.clickable then
+        stroke(self.unclickablestrokecolor)
+        fill(self.unclickablefillcolor)
+    elseif self.clickable and not self.pressing then
+        stroke(self.idlestrokecolor)
+        fill(self.idlefillcolor)
+    elseif self.clickable and self.pressing then
+        stroke(self.pressingstrokecolor)
+        fill(self.pressingfillcolor)
+    end
+    rect(self.vec2.x, self.vec2.y, self.w, self.h)
+end
+ 
+-- uses CORNERS - xy bottom left, x2y2 top right (using x+w and y+h)
+function starviewbutton:inBoundingBox(touch)
+    local x, y = self.vec2.x, self.vec2.y
+    local x2, y2 = x + self.w, y + self.h
+    local tx = touch.x
+    local ty = touch.y
+    return (tx > x and tx < x2) and (ty > y and ty < y2)
+end
+ 
+function starviewbutton:touched(touch)
+    -- BEGAN: If inside bounding box, we are pressing the button
+    --  registers the touchid with the boundingbox or whatever
+    --  WARNING: what if user is using a mouse
+    --  WARNING: what if user is using a trackpad
+    --  GOTCHA: what if user begins a second touch before the previous touch ends
+    --    the second touchid replaces the previous touchid - nothing happens
+    -- MOVING: If we move outside the bounding box, and the touchid matches
+    --  we are no longer pressing the button, but the touchid still exists
+    --  If the touchid doesn't match, we don't care about the touch. You can discard it.
+    --  GOTCHA: what if user moves a touch from outside the button onto the button
+    --    the touch is ignored, because touchid is registered during touch BEGAN
+    
+    if touch.state == BEGAN and self:inBoundingBox(touch) then
+        -- recolor the starbuttonview
+        self.pressing = true
+        self.touchid = touch.id
+    end
+    -- we don't care about the moving touch unless the touchid is registered
+    if touch.state == MOVING and touch.id == self.touchid then
+        if self:inBoundingBox(touch) then
+            self.pressing = true
+        else -- NOT in box
+            self.pressing = false
+        end
+    end
+    if touch.state == ENDED and touch.id == self.touchid then
+        self.touchid = false
+        if self.pressing == true then
+            self.pressing = false
+            self.touchid = false
+            self:callback();
+        end
+        -- If user began and ended touch without moving, pressing would still be true. set it to false no matter what
+        self.pressing = false
+    end
+end
+ 
+-- phones are too small for split-window-right and split-window-below
+function starviewbutton:callback()
+    local STARS = {}
+    for i = 1, #stars do
+        if stars[i].tapped == true then
+            table.insert(STARS, stars[i])
+        end
+    end
+    -- starlistview wants user-selected stars as its input
+    starlistview:init(STARS)
+end
+ 
+starlistview = {}
+function starlistview:init(STARS)
+    self.stars = STARS
+    for i,v in ipairs(self.stars) do
+        print(i, v.name)
+    end
+
+    -- propose text item thingy
+
+    self.y = {}
+    for i,v in ipairs(STARS) do
+        self.y[i] = HEIGHT - i*64
+    end
+    
+    DRAWSTARLISTVIEW = true
+end
+
+function starlistview:register(star)
+	local t = {
+		name = star.name;
+		longitude = star.vec2.x; 
+		latitude = star.vec2.y;
+		allegiance = star.owner;
+
+
+
+
+	}
+end
+
+function starlistview:draw()
+    background(0)
+    fill(228)
+    stroke(56,33,127)
+    rectMode(CORNER)
+    for i,v in ipairs(self.stars) do
+        rect(0,self.y[i]-64,WIDTH,55)
+        text(v.name, 200, self.y[i])
+    end
+end
+
+function starlistview:touched(touch)
+
+
+end
